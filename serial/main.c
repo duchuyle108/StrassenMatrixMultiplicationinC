@@ -46,10 +46,10 @@ int main(int argc, char const *argv[])
     
     //Multiply
     double start_time, exec_time;
-    start_time = get_wall_seconds();
-    mat_mul(A, B, C, N);
-    exec_time = get_wall_seconds() - start_time;
-    printf("Matrix multiplication time = %lf\n",exec_time);
+        start_time = get_wall_seconds();
+        mat_mul(A, B, C, N);
+        exec_time = get_wall_seconds() - start_time;
+        printf("Matrix multiplication time = %lf\n",exec_time);
 
     //Convert to 2D matrix
     etype **A2, **B2, **C2;
@@ -90,7 +90,7 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
         etype *B11, *B12, *B21, *B22;
         etype *C11, *C12, *C21, *C22;
         etype *M1, *M2, *M3, *M4, *M5, *M6, *M7;
-        etype *T1, *T2, *T3, *T4, *T5, *T6, *T7, *T8, *T9, *T10;
+        etype *T1, *T2, *T3;
 
         int n = N/2;
         int N1 = N*N/4;
@@ -98,59 +98,48 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
         int N3 = 3*N*N/4;
         
         //Allocate memory
-        mem_alloc(&A11, n); mem_alloc(&A12, n); mem_alloc(&A21, n); mem_alloc(&A22, n);
-        mem_alloc(&B11, n); mem_alloc(&B12, n); mem_alloc(&B21, n); mem_alloc(&B22, n);
-        mem_alloc(&C11, n); mem_alloc(&C12, n); mem_alloc(&C21, n); mem_alloc(&C22, n);
         mem_alloc(&M1, n); mem_alloc(&M2, n); mem_alloc(&M3, n); mem_alloc(&M4, n); 
         mem_alloc(&M5, n); mem_alloc(&M6, n); mem_alloc(&M7, n);
-        mem_alloc(&T1, n); mem_alloc(&T2, n); mem_alloc(&T3, n); mem_alloc(&T4, n); 
-        mem_alloc(&T5, n); mem_alloc(&T6, n); mem_alloc(&T7, n); mem_alloc(&T8, n);
-        mem_alloc(&T9, n); mem_alloc(&T10, n);
+        mem_alloc(&T1, n); mem_alloc(&T2, n); mem_alloc(&T3, n);
         
-        //Assign sub-matrix
         int i;
-        for (i = 0; i < N1; i++){
-            A11[i] = A[i];
-            A12[i] = A[i+N1];
-            A21[i] = A[i+N2];
-            A22[i] = A[i+N3];
+        //Assign sub-matrix
+        A11 = A; A12 = &A[N1]; A21 = &A[N2]; A22 = &A[N3];
 
-            B11[i] = B[i];
-            B12[i] = B[i+N1];
-            B21[i] = B[i+N2];
-            B22[i] = B[i+N3];
-        }
+        B11 = B; B12 = &B[N1]; B21 = &B[N2]; B22 = &B[N3];
+
+        C11 = res; C12 = &res[N1]; C21 = &res[N2]; C22 = &res[N3];
 
         //Calculate M1
         mat_add(A11, A22, T1, n);
-        mat_add(B11, B22, T2, n);
-        mat_mul(T1, T2, M1, n);
-
+        mat_add(B11, B22, M1, n);
+        mat_mul(T1, M1, M1, n);
+        
         //Calculate M2
-        mat_add(A21, A22, T3, n);
-        mat_mul(T3, B11, M2, n);
+        mat_add(A21, A22, M2, n);
+        mat_mul(M2, B11, M2, n);
 
         //Calculate M3
-        mat_sub(B12, B22, T4, n);
-        mat_mul(A11, T4, M3, n);
+        mat_sub(B12, B22, M3, n);
+        mat_mul(A11, M3, M3, n);
 
         //Calculate M4
-        mat_sub(B21, B11, T5, n);
-        mat_mul(A22, T5, M4, n);
+        mat_sub(B21, B11, M4, n);
+        mat_mul(A22, M4, M4, n);
 
         //Calculate M5
-        mat_add(A11, A12, T6, n);
-        mat_mul(T6, B22, M5, n);
+        mat_add(A11, A12, M5, n);
+        mat_mul(M5, B22, M5, n);
 
         //Calculate M6
-        mat_sub(A21, A11, T7, n);
-        mat_add(B11, B12, T8, n);
-        mat_mul(T7, T8, M6, n);
+        mat_sub(A21, A11, T2, n);
+        mat_add(B11, B12, M6, n);
+        mat_mul(T2, M6, M6, n);
 
         //Calculate M7
-        mat_sub(A12, A22, T9, n);
-        mat_add(B21, B22, T10, n);
-        mat_mul(T9, T10, M7, n);
+        mat_sub(A12, A22, T3, n);
+        mat_add(B21, B22, M7, n);
+        mat_mul(T3, M7, M7, n);
 
         for(i = 0; i < N1; i++){
             C11[i] = M1[i] + M4[i] - M5[i] + M7[i];
@@ -159,21 +148,9 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
             C22[i] = M1[i] - M2[i] + M3[i] + M6[i];
         }
 
-        for (i = 0; i < N1; i++){
-            res[i] = C11[i];
-            res[i+N1] = C12[i];
-            res[i+N2] = C21[i];
-            res[i+N3] = C22[i];
-        }
-
         //Delete matrices
-        free(A11); free(A12); free(A21); free(A22);
-        free(B11); free(B12); free(B21); free(B22);
-        free(C11); free(C12); free(C21); free(C22);
-        free(M1); free(M2); free(M3); free(M4); 
-        free(M5); free(M6); free(M7);
-        free(T1); free(T2); free(T3); free(T4); free(T5); free(T6);
-        free(T7); free(T8); free(T9); free(T10);
+        free(M1); free(M2); free(M3); free(M4); free(M5); free(M6); free(M7);
+        free(T1); free(T2); free(T3);
     }
 
 }
@@ -232,7 +209,7 @@ void validate_result(etype **A, etype **B, etype **C, int N){
             if(C[i][j] - C_test[i][j] > max_diff)
                 max_diff = C[i][j] - C_test[i][j];
 
-    printf("Max diff in an element is : %3.15lf\n", max_diff);
+    printf("Max diff in an element is : %lf\n", max_diff);
     del_matrix(C_test, N);
 }
 
