@@ -15,16 +15,19 @@ static double get_wall_seconds() {
   return seconds;
 }
 
+void morton_to_grid(etype **grid, etype *morton, int N);
+void grid_to_morton(etype **grid, etype *morton, int N);
 int validate_input(int argc, char const *argv[]);
-void validate_result(int N, etype **A, etype **B, etype **C);
-void init_matrix(etype ***arr, int N);
+void validate_result(etype **A, etype **B, etype **C, int N);
+void init_matrix(etype **arr, int N);
 void del_matrix(etype **mat, int N);
-void mem_alloc(etype ***mat, int N);
+void mem_alloc(etype **mat, int N);
+void mem_alloc_2d(etype ***mat, int N);
 etype rand_etype(etype min, etype max);
 void print_matrix(etype **mat, int N);
-void mat_mul(etype **A, etype **B, etype **res, int N);
-void mat_add(etype **A, etype **B, etype **res, int N);
-void mat_sub(etype **A, etype **B, etype **res, int N);
+void mat_mul(etype *A, etype *B, etype *res, int N);
+void mat_add(etype *A, etype *B, etype *res, int N);
+void mat_sub(etype *A, etype *B, etype *res, int N);
 
 int main(int argc, char const *argv[])
 {
@@ -36,10 +39,10 @@ int main(int argc, char const *argv[])
     printf("Matrix size: %d\n", N);
     srand(time(NULL));
     //Initialize matrices
-    etype **A, **B, **C;
+    etype *A, *B, *C;
     init_matrix(&A, N);
     init_matrix(&B, N);
-    mem_alloc(&C, N);
+    C = (etype*)malloc(N * N * sizeof(etype));
     
     //Multiply
     double start_time, exec_time;
@@ -47,25 +50,48 @@ int main(int argc, char const *argv[])
     mat_mul(A, B, C, N);
     exec_time = get_wall_seconds() - start_time;
     printf("Matrix multiplication time = %lf\n",exec_time);
-    validate_result(N, A, B, C);
+
+
+    // Convert to 2D matrix
+    etype **A2, **B2, **C2;
+    mem_alloc_2d(&A2, N);
+    mem_alloc_2d(&B2, N);
+    mem_alloc_2d(&C2, N);
+
+    morton_to_grid(A2, A, N);
+    morton_to_grid(B2, B, N);
+    morton_to_grid(C2, C, N);
+
+    // // print_matrix(A2, N);
+    // // printf("\n");
+    // // print_matrix(B2, N);
+    // // printf("\n");
+    // // print_matrix(C2, N);
+    // // printf("\n");
+
+    validate_result(A2, B2, C2, N);
+
+    del_matrix(A2, N);
+    del_matrix(B2, N);
+    del_matrix(C2, N);
 
     //Free memory allocated for matrices
-    del_matrix(A, N);
-    del_matrix(B, N);
-    del_matrix(C, N);
+    free(A);
+    free(B);
+    free(C);
 
     return 0;
 }
 
-void mat_mul(etype **A, etype **B, etype **res, int N){
+void mat_mul(etype *A, etype *B, etype *res, int N){
     if(N == 1)
-        **res = **A * **B;
+        *res = *A * *B;
     else {
-        etype **A11, **A12, **A21, **A22;
-        etype **B11, **B12, **B21, **B22;
-        etype **C11, **C12, **C21, **C22;
-        etype **M1, **M2, **M3, **M4, **M5, **M6, **M7;
-        etype **T1, **T2, **T3, **T4, **T5, **T6, **T7, **T8, **T9, **T10;
+        etype *A11, *A12, *A21, *A22;
+        etype *B11, *B12, *B21, *B22;
+        etype *C11, *C12, *C21, *C22;
+        etype *M1, *M2, *M3, *M4, *M5, *M6, *M7;
+        etype *T1, *T2, *T3, *T4, *T5, *T6, *T7, *T8, *T9, *T10;
         
         //Allocate memory
         mem_alloc(&A11, N/2); mem_alloc(&A12, N/2); mem_alloc(&A21, N/2); mem_alloc(&A22, N/2);
@@ -78,18 +104,18 @@ void mat_mul(etype **A, etype **B, etype **res, int N){
         mem_alloc(&T9, N/2); mem_alloc(&T10, N/2);
         
         //Assign sub-matrix
-        int i, j;
-        for (i = 0; i < N/2; i++)
-            for (j = 0; j < N/2; j++){
-                A11[i][j] = A[i][j];
-                A12[i][j] = A[i][j+N/2];
-                A21[i][j] = A[i+N/2][j];
-                A22[i][j] = A[i+N/2][j+N/2];
-                B11[i][j] = B[i][j];
-                B12[i][j] = B[i][j+N/2];
-                B21[i][j] = B[i+N/2][j];
-                B22[i][j] = B[i+N/2][j+N/2];
-            }
+        int i;
+        for (i = 0; i < N*N/4; i++){
+            A11[i] = A[i];
+            A12[i] = A[i+N*N/4];
+            A21[i] = A[i+N*N/2];
+            A22[i] = A[i+3*N*N/4];
+
+            B11[i] = B[i];
+            B12[i] = B[i+N*N/4];
+            B21[i] = B[i+N*N/2];
+            B22[i] = B[i+3*N*N/4];
+        }
 
         //Calculate M1
         mat_add(A11, A22, T1, N/2);
@@ -138,39 +164,37 @@ void mat_mul(etype **A, etype **B, etype **res, int N){
         mat_add(M3, M6, T2, N/2);
         mat_add(T1, T2, C22, N/2);
 
-        for (i = 0; i < N/2; i++)
-            for (j = 0; j < N/2; j++){
-                res[i][j] = C11[i][j];
-                res[i][j+N/2] = C12[i][j];
-                res[i+N/2][j] = C21[i][j];
-                res[i+N/2][j+N/2] = C22[i][j];
-            }
+        for (i = 0; i < N*N/4; i++){
+            res[i] = C11[i];
+            res[i+N*N/4] = C12[i];
+            res[i+N*N/2] = C21[i];
+            res[i+3*N*N/4] = C22[i];
+        }
 
         //Delete matrices
-        del_matrix(A11, N/2); del_matrix(A12, N/2); del_matrix(A21, N/2); del_matrix(A22, N/2);
-        del_matrix(B11, N/2); del_matrix(B12, N/2); del_matrix(B21, N/2); del_matrix(B22, N/2);
-        del_matrix(C11, N/2); del_matrix(C12, N/2); del_matrix(C21, N/2); del_matrix(C22, N/2);
-        del_matrix(M1, N/2); del_matrix(M2, N/2); del_matrix(M3, N/2); del_matrix(M4, N/2); 
-        del_matrix(M5, N/2); del_matrix(M6, N/2); del_matrix(M7, N/2);
-        del_matrix(T1, N/2); del_matrix(T2, N/2); del_matrix(T3, N/2); del_matrix(T4, N/2); 
-        del_matrix(T5, N/2); del_matrix(T6, N/2); del_matrix(T7, N/2); del_matrix(T8, N/2); 
-        del_matrix(T9, N/2); del_matrix(T10, N/2);
+        free(A11); free(A12); free(A21); free(A22);
+        free(B11); free(B12); free(B21); free(B22);
+        free(C11); free(C12); free(C21); free(C22);
+        free(M1); free(M2); free(M3); free(M4); 
+        free(M5); free(M6); free(M7);
+        free(T1); free(T2); free(T3); free(T4); free(T5); free(T6);
+        free(T7); free(T8); free(T9); free(T10);
     }
 
 }
 
-void mat_add(etype **A, etype **B, etype **res, int N){
-    int i, j;
-    for(i = 0; i < N; i++)
-        for(j = 0; j < N; j++)
-            res[i][j] = A[i][j] + B[i][j];
+void mat_add(etype *A, etype *B, etype *res, int N){
+    int i;
+    int n = N * N;
+    for(i = 0; i < n; i++)
+            res[i] = A[i] + B[i];
 }
 
-void mat_sub(etype **A, etype **B, etype **res, int N){
-    int i, j;
-    for(i = 0; i < N; i++)
-        for(j = 0; j < N; j++)
-            res[i][j] = A[i][j] - B[i][j];
+void mat_sub(etype *A, etype *B, etype *res, int N){
+    int i;
+    int n = N * N;
+    for(i = 0; i < n; i++)
+            res[i] = A[i] - B[i];
 }
 
 int validate_input(int argc, char const *argv[]){
@@ -193,7 +217,7 @@ int validate_input(int argc, char const *argv[]){
     return 0;
 }
 
-void validate_result(int N, etype **A, etype **B, etype **C){
+void validate_result(etype **A, etype **B, etype **C, int N){
     etype **C_test = (etype**)malloc(N * sizeof(etype*));
     int i, j, k;
     for(i = 0; i < N; i++){
@@ -212,29 +236,31 @@ void validate_result(int N, etype **A, etype **B, etype **C){
         for(j = 0; j < N; j++)
             if(C[i][j] - C_test[i][j] > max_diff)
                 max_diff = C[i][j] - C_test[i][j];
-    
-    del_matrix(C_test, N);
     printf("Max diff in an element is : %3.15lf\n", max_diff);
+    del_matrix(C_test, N);
 }
 
-void mem_alloc(etype ***mat, int N){
+void init_matrix(etype **mat, int N){
     int i;
-    *mat = (etype**)malloc(N * sizeof(etype*));
-    for(i = 0; i < N; i++){
-        (*mat)[i] = (etype*)malloc(N * sizeof(etype));
-    }
-}
-
-void init_matrix(etype ***mat, int N){
-    int i, j;
     //Allocate memory
-    mem_alloc(mat, N);
+    int n = N * N;
+    *mat = (etype*)malloc(n * sizeof(etype));
 
     // Initialize matrix values
-    for(i =0; i < N; i++)
-        for(j=0; j < N; j++)
-            (*mat)[i][j] = rand_etype(-10, 10);
+    for(i =0; i < n; i++)
+            (*mat)[i] = rand_etype(-10, 10);
 
+}
+
+void mem_alloc(etype **mat, int N){
+    *mat = (etype*)malloc(N * N * sizeof(etype));
+}
+
+void mem_alloc_2d(etype ***mat, int N){
+    int i;
+    *mat = (etype**)malloc(N * sizeof(etype*));
+    for(i = 0; i < N; i++)
+        (*mat)[i] = (etype*)malloc(N * sizeof(etype));
 }
 
 void del_matrix(etype **mat, int N){
@@ -260,4 +286,74 @@ void print_matrix(etype **mat, int N){
     }
 }
 
+// Convert a Morton-order matrix to a 2D matrix
+void morton_to_grid(etype **grid, etype *morton, int N){
+    if(N == 1)
+        **grid = *morton;
+    else{
+        int n = N/2;
+        //Divide morton-order matrix into 4 parts
+        etype *morton2 = &morton[N*N/4];
+        etype *morton3 = &morton[N*N/2];
+        etype *morton4 = &morton[3*N*N/4];
+        int i;
 
+        //Divide 2D matrix into 4 parts
+        etype **grid11, **grid12, **grid21, **grid22;
+        grid11 = (etype**)malloc(n*sizeof(etype*));
+        grid12 = (etype**)malloc(n*sizeof(etype*));
+        grid21 = (etype**)malloc(n*sizeof(etype*));
+        grid22 = (etype**)malloc(n*sizeof(etype*));
+        
+        for(i = 0; i < n; i++){
+            grid11[i] = &grid[i][0];
+            grid12[i] = &grid[i][n];
+            grid21[i] = &grid[i+n][0];
+            grid22[i] = &grid[i+n][n];
+        }
+        
+        //Recursive call in each part
+        morton_to_grid(grid11, morton, n);
+        morton_to_grid(grid12, morton2, n);
+        morton_to_grid(grid21, morton3, n);
+        morton_to_grid(grid22, morton4, n);
+
+        free(grid11); free(grid12); free(grid21); free(grid22);
+    }
+}
+
+// Convert a 2D matrix to a Morton-order matrix
+void grid_to_morton(etype **grid, etype *morton, int N){
+    if(N == 1)
+        *morton = **grid;
+    else {
+        int n = N/2;
+        //Divide morton-order matrix into 4 parts
+        etype *morton2 = &morton[N*N/4];
+        etype *morton3 = &morton[N*N/2];
+        etype *morton4 = &morton[3*N*N/4];
+        int i;
+
+        //Divide 2D matrix into 4 parts
+        etype **grid11, **grid12, **grid21, **grid22;
+        grid11 = (etype**)malloc(n*sizeof(etype*));
+        grid12 = (etype**)malloc(n*sizeof(etype*));
+        grid21 = (etype**)malloc(n*sizeof(etype*));
+        grid22 = (etype**)malloc(n*sizeof(etype*));
+        
+        for(i = 0; i < n; i++){
+            grid11[i] = &grid[i][0];
+            grid12[i] = &grid[i][n];
+            grid21[i] = &grid[i+n][0];
+            grid22[i] = &grid[i+n][n];
+        }
+        
+        //Recursive call in each part
+        grid_to_morton(grid11, morton, n);
+        grid_to_morton(grid12, morton2, n);
+        grid_to_morton(grid21, morton3, n);
+        grid_to_morton(grid22, morton4, n);
+
+        free(grid11); free(grid12); free(grid21); free(grid22);
+    }
+}
