@@ -8,6 +8,12 @@
 
 typedef double etype;
 
+etype ***M;
+etype ***T;
+
+etype **tempA, **tempB, **tempC;
+
+
 static double get_wall_seconds() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -25,7 +31,7 @@ void mem_alloc(etype **mat, int N);
 void mem_alloc_2d(etype ***mat, int N);
 etype rand_etype(etype min, etype max);
 void print_matrix(etype **mat, int N);
-void mat_mul(etype *A, etype *B, etype *res, int N);
+void mat_mul(etype *A, etype *B, etype *res, int N, int step);
 void mat_add(etype *A, etype *B, etype *res, int N);
 void mat_sub(etype *A, etype *B, etype *res, int N);
 
@@ -35,7 +41,10 @@ int main(int argc, char const *argv[])
     if(validate_input(argc, argv))
         return 1;
 
-    int N = pow(2,atoi(argv[1]));
+    int power = atoi(argv[1]);
+    int cut_off = 7;
+    int N = pow(2,power);
+    int temp_mat_size;
     printf("Matrix size: %d\n", N);
     srand(time(NULL));
     //Initialize matrices
@@ -45,9 +54,35 @@ int main(int argc, char const *argv[])
     C = (etype*)malloc(N * N * sizeof(etype));
     
     //Multiply
+    int i, j, sub_block;
+    if(power > cut_off){
+        M = (etype***)malloc(7 * sizeof(etype**));
+        T = (etype***)malloc(3 * sizeof(etype**));
+
+        for(i = 0; i < 7; i++){
+            M[i] = (etype**)malloc((power - cut_off) * sizeof(etype*));
+            for(j = 0; j < power - cut_off; j++){
+                sub_block = pow(2, 2 * (power - 1 - j));
+                M[i][j] = (etype*)malloc(sub_block* sizeof(etype));
+            }
+        }
+
+        for(i = 0; i < 3; i++){
+            T[i]= (etype**)malloc((power - cut_off) * sizeof(etype*));
+            for(j = 0; j < power - cut_off; j++){
+                sub_block = pow(2, 2 * (power - 1 - j));
+                T[i][j] = (etype*)malloc(sub_block* sizeof(etype));
+            }
+        }
+        temp_mat_size = pow(2, cut_off);
+        mem_alloc_2d(&tempA, temp_mat_size);
+        mem_alloc_2d(&tempB, temp_mat_size);
+        mem_alloc_2d(&tempC, temp_mat_size);
+    }
+    
     double start_time, exec_time;
     start_time = get_wall_seconds();
-    mat_mul(A, B, C, N);
+    mat_mul(A, B, C, N, 0);
     exec_time = get_wall_seconds() - start_time;
     printf("Matrix multiplication time = %lf\n",exec_time);
 
@@ -79,32 +114,46 @@ int main(int argc, char const *argv[])
     free(B);
     free(C);
 
+    //Free M, T
+    if(power > cut_off){
+        for(i = 0; i < 7; i++){
+            for(j = 0; j < power - cut_off; j++){
+                free(M[i][j]);
+            }
+            free(M[i]);
+        }
+        for(i = 0; i < 3; i++){
+            for(j = 0; j < power - cut_off; j++){
+                free(T[i][j]);
+            }
+            free(T[i]);
+        }
+        free(M);
+        free(T);
+        del_matrix(tempA, temp_mat_size);
+        del_matrix(tempB, temp_mat_size);
+        del_matrix(tempC, temp_mat_size);
+    }
+
     return 0;
 }
 
-void mat_mul(etype *A, etype *B, etype *res, int N){
-    if(N <= 256){
-        etype **gridA, **gridB, **gridC;
-        mem_alloc_2d(&gridA, N);
-        mem_alloc_2d(&gridB, N);
-        mem_alloc_2d(&gridC, N);
+void mat_mul(etype *A, etype *B, etype *res, int N, int step){
+    if(N <= 512){
         int i,j,k;
         for(i = 0; i < N; i++)
             for(k = 0; k < N; k++)
-                gridC[i][k] = 0;
+                tempC[i][k] = 0;
 
-        morton_to_grid(gridA, A, N);
-        morton_to_grid(gridB, B, N);
+        morton_to_grid(tempA, A, N);
+        morton_to_grid(tempB, B, N);
 
         for(i = 0; i < N; i++)
             for(k = 0; k < N; k++)
                 for(j = 0; j < N; j++)
-                    gridC[i][j] += gridA[i][k] * gridB[k][j];
+                    tempC[i][j] += tempA[i][k] * tempB[k][j];
         
-        grid_to_morton(gridC, res, N);
-        del_matrix(gridA, N);
-        del_matrix(gridB, N);
-        del_matrix(gridC, N);
+        grid_to_morton(tempC, res, N);
     }
     else {
         etype *A11, *A12, *A21, *A22;
@@ -118,10 +167,10 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
         int N2 = N*N/2;
         int N3 = 3*N*N/4;
         
-        //Allocate memory
-        mem_alloc(&M1, n); mem_alloc(&M2, n); mem_alloc(&M3, n); mem_alloc(&M4, n); 
-        mem_alloc(&M5, n); mem_alloc(&M6, n); mem_alloc(&M7, n);
-        mem_alloc(&T1, n); mem_alloc(&T2, n); mem_alloc(&T3, n);
+        // //Allocate memory
+        // mem_alloc(&M1, N1); mem_alloc(&M2, N1); mem_alloc(&M3, N1); mem_alloc(&M4, N1); 
+        // mem_alloc(&M5, N1); mem_alloc(&M6, N1); mem_alloc(&M7, N1);
+        // mem_alloc(&T1, N1); mem_alloc(&T2, N1); mem_alloc(&T3, N1); mem_alloc(&T4, N1); 
         
         int i;
         //Assign sub-matrix
@@ -131,36 +180,39 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
 
         C11 = res; C12 = &res[N1]; C21 = &res[N2]; C22 = &res[N3];
 
+        M1 = M[0][step]; M2 = M[1][step]; M3 = M[2][step]; M4 = M[3][step]; M5 = M[4][step];
+        M6 = M[5][step]; M7 = M[6][step]; T1 = T[0][step]; T2 = T[1][step]; T3 = T[2][step];
+
         //Calculate M1
         mat_add(A11, A22, T1, n);
         mat_add(B11, B22, M1, n);
-        mat_mul(T1, M1, M1, n);
+        mat_mul(T1, M1, M1, n, step + 1);
         
         //Calculate M2
         mat_add(A21, A22, M2, n);
-        mat_mul(M2, B11, M2, n);
+        mat_mul(M2, B11, M2, n, step + 1);
 
         //Calculate M3
         mat_sub(B12, B22, M3, n);
-        mat_mul(A11, M3, M3, n);
+        mat_mul(A11, M3, M3, n, step + 1);
 
         //Calculate M4
         mat_sub(B21, B11, M4, n);
-        mat_mul(A22, M4, M4, n);
+        mat_mul(A22, M4, M4, n, step + 1);
 
         //Calculate M5
         mat_add(A11, A12, M5, n);
-        mat_mul(M5, B22, M5, n);
+        mat_mul(M5, B22, M5, n, step + 1);
 
         //Calculate M6
         mat_sub(A21, A11, T2, n);
         mat_add(B11, B12, M6, n);
-        mat_mul(T2, M6, M6, n);
+        mat_mul(T2, M6, M6, n, step + 1);
 
         //Calculate M7
         mat_sub(A12, A22, T3, n);
         mat_add(B21, B22, M7, n);
-        mat_mul(T3, M7, M7, n);
+        mat_mul(T3, M7, M7, n, step + 1);
 
         for(i = 0; i < N1; i++){
             C11[i] = M1[i] + M4[i] - M5[i] + M7[i];
@@ -170,8 +222,8 @@ void mat_mul(etype *A, etype *B, etype *res, int N){
         }
 
         //Delete matrices
-        free(M1); free(M2); free(M3); free(M4); free(M5); free(M6); free(M7);
-        free(T1); free(T2); free(T3);
+        // free(M1); free(M2); free(M3); free(M4); free(M5); free(M6); free(M7);
+        // free(T1); free(T2); free(T3); free(T4);
     }
 
 }
@@ -180,14 +232,14 @@ void mat_add(etype *A, etype *B, etype *res, int N){
     int i;
     int n = N * N;
     for(i = 0; i < n; i++)
-        res[i] = A[i] + B[i];
+            res[i] = A[i] + B[i];
 }
 
 void mat_sub(etype *A, etype *B, etype *res, int N){
     int i;
     int n = N * N;
     for(i = 0; i < n; i++)
-        res[i] = A[i] - B[i];
+            res[i] = A[i] - B[i];
 }
 
 int validate_input(int argc, char const *argv[]){
@@ -230,7 +282,7 @@ void validate_result(etype **A, etype **B, etype **C, int N){
             if(C[i][j] - C_test[i][j] > max_diff)
                 max_diff = C[i][j] - C_test[i][j];
 
-    printf("Max diff in an element is : %3.20lf\n", max_diff);
+    printf("Max diff in an element is : %3.15lf\n", max_diff);
     del_matrix(C_test, N);
 }
 
