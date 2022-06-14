@@ -46,10 +46,10 @@ int main(int argc, char const *argv[])
     
     //Multiply
     double start_time, exec_time;
-        start_time = get_wall_seconds();
-        mat_mul(A, B, C, N);
-        exec_time = get_wall_seconds() - start_time;
-        printf("Matrix multiplication time = %lf\n",exec_time);
+    start_time = get_wall_seconds();
+    mat_mul(A, B, C, N);
+    exec_time = get_wall_seconds() - start_time;
+    printf("Matrix multiplication time = %lf\n",exec_time);
 
     //Convert to 2D matrix
     etype **A2, **B2, **C2;
@@ -83,8 +83,29 @@ int main(int argc, char const *argv[])
 }
 
 void mat_mul(etype *A, etype *B, etype *res, int N){
-    if(N == 1)
-        *res = *A * *B;
+    if(N <= 256){
+        etype **gridA, **gridB, **gridC;
+        mem_alloc_2d(&gridA, N);
+        mem_alloc_2d(&gridB, N);
+        mem_alloc_2d(&gridC, N);
+        int i,j,k;
+        for(i = 0; i < N; i++)
+            for(k = 0; k < N; k++)
+                gridC[i][k] = 0;
+
+        morton_to_grid(gridA, A, N);
+        morton_to_grid(gridB, B, N);
+
+        for(i = 0; i < N; i++)
+            for(k = 0; k < N; k++)
+                for(j = 0; j < N; j++)
+                    gridC[i][j] += gridA[i][k] * gridB[k][j];
+        
+        grid_to_morton(gridC, res, N);
+        del_matrix(gridA, N);
+        del_matrix(gridB, N);
+        del_matrix(gridC, N);
+    }
     else {
         etype *A11, *A12, *A21, *A22;
         etype *B11, *B12, *B21, *B22;
@@ -209,7 +230,7 @@ void validate_result(etype **A, etype **B, etype **C, int N){
             if(C[i][j] - C_test[i][j] > max_diff)
                 max_diff = C[i][j] - C_test[i][j];
 
-    printf("Max diff in an element is : %lf\n", max_diff);
+    printf("Max diff in an element is : %3.20lf\n", max_diff);
     del_matrix(C_test, N);
 }
 
@@ -261,8 +282,12 @@ void print_matrix(etype **mat, int N){
 
 // Convert a Morton-order matrix to a 2D matrix
 void morton_to_grid(etype **grid, etype *morton, int N){
-    if(N == 1)
-        **grid = *morton;
+    if(N == 2){
+        grid[0][0] = morton[0];
+        grid[0][1] = morton[1];
+        grid[1][0] = morton[2];
+        grid[1][1] = morton[3];
+    }
     else{
         int n = N/2;
         //Divide morton-order matrix into 4 parts
@@ -297,8 +322,12 @@ void morton_to_grid(etype **grid, etype *morton, int N){
 
 // Convert a 2D matrix to a Morton-order matrix
 void grid_to_morton(etype **grid, etype *morton, int N){
-    if(N == 1)
-        *morton = **grid;
+    if(N == 2){
+        morton[0] = grid[0][0];
+        morton[1] = grid[0][1];
+        morton[2] = grid[1][0];
+        morton[3] = grid[1][1];
+    }
     else {
         int n = N/2;
         //Divide morton-order matrix into 4 parts
