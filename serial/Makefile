@@ -3,7 +3,7 @@ LD = gcc
 CFLAGS = -O3 -Wall
 LDFLAGS = -lm
 RM = /bin/rm -f
-OBJS = main.o
+OBJS = matrix.o main.o
 EXECUTABLE = strassen
 
 all: $(EXECUTABLE)
@@ -13,6 +13,9 @@ $(EXECUTABLE): $(OBJS)
 
 main.o: main.c
 	$(CC) $(CFLAGS) -c main.c
+
+matrix.o: matrix.c matrix.h
+	$(CC) $(CFLAGS) -c matrix.c
 
 clean:
 	$(RM) $(EXECUTABLE) $(OBJS)
